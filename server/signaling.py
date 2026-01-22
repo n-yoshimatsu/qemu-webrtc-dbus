@@ -10,7 +10,7 @@ from aiohttp import web
 from aiortc import RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaBlackhole
 
-from .video_track import QEMUVideoTrack
+from .video_track import QEMUVideoTrack, MockVideoTrack
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,8 @@ class SignalingServer:
                 logger.info(f"ICE connection state: {pc.iceConnectionState}")
             
             # ビデオトラック追加（10fpsで大幅なパフォーマンス改善）
-            video_track = QEMUVideoTrack(self.display_capture, fps=10)
+            import time
+            video_track = QEMUVideoTrack(self.display_capture, fps=10, start_time=time.time())
             pc.addTrack(video_track)
             
             # Offerを設定

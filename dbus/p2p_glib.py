@@ -1,5 +1,5 @@
 """
-GLib/Gio P2P D-Bus Implementation - WITH DEBUG LOGGING
+GLib/Gio P2P D-Bus Implementation
 
 Key fix: CLIENT側ではGUID=Noneが必須
 """
@@ -123,21 +123,21 @@ class P2PListenerServer:
                 Gio.DBusMessageType.SIGNAL: "SIGNAL"
             }.get(msg_type, f"UNKNOWN({msg_type})")
             
-            logger.info(f"[FILTER] Incoming {type_name}")
+            logger.debug(f"[FILTER] Incoming {type_name}")
             
             if msg_type == Gio.DBusMessageType.METHOD_CALL:
                 member = message.get_member()
                 interface = message.get_interface()
                 path = message.get_path()
-                logger.info(f"[FILTER]   Member: {member}")
-                logger.info(f"[FILTER]   Interface: {interface}")
-                logger.info(f"[FILTER]   Path: {path}")
+                logger.debug(f"[FILTER]   Member: {member}")
+                logger.debug(f"[FILTER]   Interface: {interface}")
+                logger.debug(f"[FILTER]   Path: {path}")
                 
                 # ファイルディスクリプタがある場合
                 unix_fd_list = message.get_unix_fd_list()
                 if unix_fd_list:
                     fd_count = unix_fd_list.get_length()
-                    logger.info(f"[FILTER]   FD count: {fd_count}")
+                    logger.debug(f"[FILTER]   FD count: {fd_count}")
                     
                 # メッセージフィルター内で全メソッドを処理（PyGObject register_objectの回避策）
                 try:
@@ -145,7 +145,7 @@ class P2PListenerServer:
                     handled = False
                     
                     if member == "ScanoutDMABUF":
-                        logger.info("📥 ScanoutDMABUF")
+                        logger.debug("📥 ScanoutDMABUF")
                         if unix_fd_list and unix_fd_list.get_length() > 0 and body:
                             fd_index, width, height, stride, fourcc, modifier, y0_top = body.unpack()
                             actual_fd = unix_fd_list.get(fd_index)
@@ -159,7 +159,7 @@ class P2PListenerServer:
                             handled = True
                     
                     elif member == "CursorDefine":
-                        logger.info("📥 CursorDefine")
+                        logger.debug("📥 CursorDefine")
                         if body:
                             width, height, hot_x, hot_y, data = body.unpack()
                             self.listener.CursorDefine(width, height, hot_x, hot_y, bytes(data))
@@ -353,7 +353,6 @@ class P2PListenerServer:
                 
             elif method_name == "UpdateDMABUF":
                 x, y, width, height = parameters.unpack()
-                logger.debug(f"UpdateDMABUF: ({x},{y}) {width}x{height}")
                 self.listener.UpdateDMABUF(x, y, width, height)
                 invocation.return_value(None)
                 

@@ -33,6 +33,26 @@ This directory contains the historical investigation documents tracking the root
   - gl=off (Scanout/linear) works correctly
   - OpenGL implementation required for gl=on (DMA-BUF/tiled)
 
+### Qt Investigation (2026-01-22) - Qt-based Approach Not Viable
+- **File**: `Qt_Implementation_Evaluation.md`
+- **Focus**: Headless Qt + EGL feasibility
+- **Key Findings**:
+  - Qt-based OpenGL + DMA-BUF is difficult in this environment
+  - gl=off continuation is recommended for stability
+
+### Qt DMA-BUF Plan (2026-01-22) - Superseded
+- **File**: `Qt_DMABUF_Implementation.md`
+- **Focus**: PyQt5-based DMA-BUF renderer plan
+- **Key Findings**:
+  - Plan documented but not used (Qt not viable)
+
+### PyQt Issue Analysis (2026-01-22) - Headless Limitation
+- **File**: `PYQT_ISSUE_ANALYSIS.md`
+- **Focus**: QOffscreenSurface failure in headless environments
+- **Key Findings**:
+  - QOffscreenSurface segfault due to missing QScreen
+  - Direct EGL + OpenGL is required
+
 ## Investigation Evolution
 
 The investigation evolved through several phases:

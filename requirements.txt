@@ -1,5 +1,6 @@
 aiohappyeyeballs==2.6.1
 aiohttp==3.13.3
+aiohttp-cors==0.7.0
 aioice==0.10.2
 aiortc==1.14.0
 aiosignal==1.4.0
@@ -25,5 +26,6 @@ pylibsrtp==1.0.0
 PyOpenGL==3.1.10
 PyOpenGL-accelerate==3.1.10
 pyOpenSSL==25.3.0
+PyQt5==5.15.11
 typing_extensions==4.15.0
 yarl==1.22.0

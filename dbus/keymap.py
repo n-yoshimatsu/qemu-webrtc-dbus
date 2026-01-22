@@ -140,8 +140,3 @@ def js_code_to_qemu(js_code: str) -> int:
     """
     return JS_TO_QEMU.get(js_code)
 
-
-# For debugging
-def get_all_mappings():
-    """Return all mappings for debugging"""
-    return JS_TO_QEMU

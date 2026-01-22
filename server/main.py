@@ -9,6 +9,7 @@ import logging
 import sys
 from pathlib import Path
 from aiohttp import web
+import aiohttp_cors
 
 # パス設定
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -18,7 +19,7 @@ from server.signaling import SignalingServer
 from server.input_handler import InputHandler
 
 logging.basicConfig(
-    level=logging.INFO,  # DEBUGからINFOに変更（パフォーマンス向上）
+    level=logging.WARNING,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
@@ -26,8 +27,27 @@ logging.basicConfig(
 logging.getLogger('aiortc').setLevel(logging.WARNING)
 logging.getLogger('asyncio').setLevel(logging.WARNING)
 logging.getLogger('aiohttp.access').setLevel(logging.WARNING)
+logging.getLogger('aioice').setLevel(logging.WARNING)
+logging.getLogger('aioice.ice').setLevel(logging.WARNING)
+logging.getLogger('dasbus').setLevel(logging.WARNING)
+logging.getLogger('dasbus.connection').setLevel(logging.WARNING)
+logging.getLogger('dbus.listener').setLevel(logging.WARNING)
+logging.getLogger('dbus.dmabuf_gl').setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
+
+
+async def wait_for_initial_frame(display_capture):
+    """初期フレームをバックグラウンドで待機"""
+    try:
+        while True:
+            frame = await display_capture.get_frame()
+            if frame is not None:
+                logger.info(f"✓ Initial frame received: {frame.shape}")
+                break
+            await asyncio.sleep(1)
+    except Exception as e:
+        logger.error(f"Error waiting for initial frame: {e}")
 
 
 async def index(request):
@@ -62,22 +82,7 @@ async def main():
     logger.info("✓ DisplayListener registered")
     print()
     
-    # 初期フレームを取得（最大5秒待機）
-    logger.info("Waiting for initial frame...")
-    for i in range(5):
-        frame = await display_capture.get_frame()
-        if frame is not None:
-            logger.info(f"✓ Initial frame received: {frame.shape}")
-            break
-        await asyncio.sleep(1)
-        logger.info(f"  {i+1} second(s) elapsed... (move mouse in VM to trigger frame)")
-    
-    if display_capture.current_frame is None:
-        logger.warning("No initial frame received - screen will be black until VM activity")
-    
-    print()
-    
-    # 2. WebRTCサーバー起動
+    # 2. WebRTCサーバー起動（先に起動）
     logger.info("2. Starting WebRTC server...")
     
     signaling = SignalingServer(display_capture)
@@ -90,6 +95,16 @@ async def main():
     app.router.add_post('/mouse', input_handler.handle_mouse)
     app.router.add_post('/keyboard', input_handler.handle_keyboard)
     app.router.add_static('/client', Path(__file__).parent.parent / 'client')
+    
+    # CORS設定
+    cors = aiohttp_cors.setup(app, defaults={
+        "*": aiohttp_cors.ResourceOptions(
+            allow_credentials=True,
+            expose_headers="*",
+            allow_headers="*",
+            allow_methods="*",
+        )
+    })
     
     # サーバー起動
     runner = web.AppRunner(app)
@@ -106,6 +121,10 @@ async def main():
     logger.info("Press Ctrl+C to stop")
     logger.info("=" * 80)
     print()
+    
+    # 初期フレームを取得（サーバー起動後にバックグラウンドで待機）
+    logger.info("Waiting for initial frame in background...")
+    asyncio.create_task(wait_for_initial_frame(display_capture))
     
     try:
         # サーバー実行

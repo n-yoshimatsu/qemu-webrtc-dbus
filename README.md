@@ -1,75 +1,50 @@
 # QEMU WebRTC D-Bus Display
 
-WebRTC-based remote desktop for QEMU virtual machines using D-Bus Display interface.
+QEMU の D-Bus Display 出力を WebRTC でブラウザに配信するツールです。  
+gl=on（DMA-BUF + OpenGL）と gl=off（Scanout）に対応しています。
 
-## Overview
+## 目的
 
-This project enables real-time screen streaming from QEMU VMs to web browsers via WebRTC. It uses QEMU's D-Bus Display interface for efficient screen capture and input forwarding.
+- QEMU ゲスト画面をブラウザで表示・操作する
+- D-Bus Display を利用して低レイテンシな画面取得と入力転送を行う
 
-## Features
-
-- ✅ Real-time screen capture via QEMU D-Bus Display
-- ✅ WebRTC video streaming (aiortc)
-- ✅ Mouse and keyboard input forwarding
-- ✅ Low latency (<10ms for input, <100ms for video)
-- ✅ Browser-based access (no client installation)
-- ✅ Supports both gl=on (OpenGL/DMA-BUF) and gl=off (Scanout) modes
-
-## Architecture
+## ツール構成
 
 ```
-QEMU VM (virtio-vga-gl)
-  ↓ D-Bus Display API
-Python Backend (DisplayCapture)
+QEMU VM
+  ↓ D-Bus Display (RegisterListener + P2P D-Bus)
+Python Backend (DisplayCapture / Listener / DMA-BUF renderer)
   ↓ aiortc
 WebRTC
-  ↓ Browser
-HTML5 Canvas
+  ↓
+Browser (client/index.html)
 ```
 
-## Requirements
-
-- QEMU 7.0+ with D-Bus Display support
-- Python 3.12+
-- Linux (tested on Ubuntu)
-- OpenGL/EGL support (for gl=on mode)
-
-## Installation
+## セットアップ
 
 ```bash
-# Clone repository
-git clone https://github.com/n-yoshimatsu/qemu-webrtc-dbus.git
-cd qemu-webrtc-dbus
-
-# Create virtual environment
 python3 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
+./venv/bin/python -m pip install --upgrade pip
+./venv/bin/python -m pip install -r requirements.txt
 ```
 
-## Usage
+## 利用手順
 
-### 1. Start QEMU with D-Bus Display
+### 1. QEMU を起動
 
-**gl=off mode (Scanout, linear memory)**:
+推奨: `start_qemu_gl_on.sh` を使う（D-Bus デーモン起動込み）。
+
 ```bash
-qemu-system-x86_64 \
-  -enable-kvm -M q35 -smp 4 -m 4G \
-  -display dbus,p2p=no,gl=off,addr=unix:path=/tmp/qemu_dbus.sock \
-  -device virtio-vga,hostmem=4G \
-  -device virtio-tablet-pci \
-  -device virtio-keyboard-pci \
-  -drive file=vm.qcow2
+./start_qemu_gl_on.sh
 ```
 
-**gl=on mode (OpenGL/DMA-BUF, GPU acceleration)**:
+手動起動する場合の例（gl=on）:
+
 ```bash
 qemu-system-x86_64 \
   -enable-kvm -M q35 -smp 4 -m 4G \
   -display dbus,p2p=no,gl=on,addr=unix:path=/tmp/qemu_dbus.sock \
-  -device virtio-vga-gl,hostmem=4G,blob=true \
+  -device virtio-vga-gl,hostmem=4G,blob=true,venus=true \
   -device virtio-tablet-pci \
   -device virtio-keyboard-pci \
   -object memory-backend-memfd,id=mem1,size=4G \
@@ -77,102 +52,53 @@ qemu-system-x86_64 \
   -drive file=vm.qcow2
 ```
 
-### 2. Start WebRTC Server
+### 2. WebRTC サーバーを起動
 
 ```bash
 export DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/qemu_dbus.sock
-python3 server/main.py
+./venv/bin/python server/main.py
 ```
 
-### 3. Open Browser
+### 3. ブラウザでアクセス
 
-Navigate to: `http://localhost:8081`
+`http://localhost:8081`
 
-## Project Structure
+## 環境変数
+
+- `DBUS_SESSION_BUS_ADDRESS`  
+  QEMU の D-Bus ソケットに接続するためのアドレス
+- `QEMU_WEBRTC_DOWNSAMPLE`  
+  `1` で 1/2 ダウンサンプル（既定は `0` でフル解像度）
+
+## プロジェクト構成
 
 ```
 qemu-webrtc-dbus/
+├── client/
+│   └── index.html             # ブラウザ UI
 ├── dbus/
-│   ├── display_capture.py    # Main capture interface
-│   ├── listener.py            # D-Bus Listener implementation
-│   ├── p2p_glib.py            # P2P D-Bus connection (GLib)
-│   └── dmabuf_gl.py           # OpenGL DMA-BUF renderer
+│   ├── display_capture.py      # D-Bus接続・入力送信
+│   ├── listener.py             # D-Bus Listener
+│   ├── p2p_glib.py             # P2P D-Bus接続
+│   └── dmabuf_gl.py            # EGL + OpenGL DMA-BUFレンダラ
 ├── server/
-│   ├── main.py                # WebRTC server entry point
-│   ├── video_track.py         # Video stream track
-│   ├── signaling.py           # WebRTC signaling
-│   └── input_handler.py       # Mouse/keyboard input
-├── static/
-│   └── index.html             # Browser client
-├── Performance_Issue_v5.md    # Technical deep-dive
+│   ├── main.py                 # WebRTCサーバー
+│   ├── video_track.py          # VideoStreamTrack
+│   ├── signaling.py            # SDP/ICE
+│   └── input_handler.py        # 入力処理
+├── docs/
+│   └── QEMU_DBus_Display.md     # D-Bus出力の詳細
 └── README.md
 ```
 
-## Performance
+## 既知の課題
 
-### gl=off mode (Scanout)
-- Screen capture: ~8ms per frame
-- Input latency: <10ms
-- Startup time: ~15 seconds
+- 解像度変更時は再接続が必要な場合あり
+- マルチディスプレイ未対応
+- 音声未対応
 
-### gl=on mode (OpenGL/DMA-BUF)
-- Screen capture: <5ms per frame (GPU accelerated)
-- Input latency: <10ms
-- Startup time: ~3 seconds
+## 詳細ドキュメント
 
-## Technical Details
+- D-Bus 出力の詳細: `docs/QEMU_DBus_Display.md`
+- 調査ログ: `Performance_Issue_v5.md`
 
-See [Performance_Issue_v5.md](Performance_Issue_v5.md) for detailed analysis of:
-- DMA-BUF tiling formats
-- OpenGL implementation strategy
-- Performance optimization techniques
-
-## Known Issues
-
-- **gl=on mode**: Requires OpenGL DMA-BUF import implementation (work in progress)
-- **Resolution changes**: May require reconnection
-- **Multiple displays**: Not yet supported
-
-## Development Status
-
-- [x] D-Bus Display integration
-- [x] WebRTC video streaming
-- [x] Mouse/keyboard input
-- [x] gl=off (Scanout) support
-- [ ] gl=on (OpenGL/DMA-BUF) support
-- [ ] Audio streaming
-- [ ] Multi-display support
-
-## Dependencies
-
-- aiortc: WebRTC implementation
-- dasbus: D-Bus Python library
-- PyGObject: GLib/GIO Python bindings
-- numpy: Array processing
-- PyOpenGL: OpenGL bindings
-- aiohttp: HTTP server
-
-## License
-
-MIT License
-
-## Contributing
-
-Contributions welcome! Please open an issue or pull request.
-
-## References
-
-- [QEMU D-Bus Display Documentation](https://www.qemu.org/docs/master/interop/dbus-display.html)
-- [qemu-display (Rust reference implementation)](https://gitlab.freedesktop.org/mhendrikx/qemu-display)
-- [aiortc Documentation](https://aiortc.readthedocs.io/)
-
-## Author
-
-Norifumi Yoshimatsu (n-yoshimatsu)
-
-## Acknowledgments
-
-Special thanks to:
-- QEMU community for D-Bus Display API
-- qemu-display project for reference implementation
-- Claude (Anthropic) for development assistance

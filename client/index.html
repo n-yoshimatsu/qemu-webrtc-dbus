@@ -12,48 +12,36 @@
         }
         
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #1a1a1a;
-            color: #ffffff;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 20px;
+            font-family: "Space Grotesk", "Futura", "Avenir", "Trebuchet MS", sans-serif;
+            background: #ffffff;
+            color: #111111;
             min-height: 100vh;
         }
         
-        header {
-            text-align: center;
-            margin-bottom: 30px;
+        :root {
+            --panel-bg: #f5f5f5;
+            --panel-border: #e5e5e5;
+            --accent: #111111;
+            --accent-off: #bbbbbb;
         }
         
-        h1 {
-            font-size: 2rem;
-            margin-bottom: 10px;
-            color: #00ff88;
+        .layout {
+            display: grid;
+            grid-template-columns: 140px 1fr;
+            gap: 24px;
+            min-height: 100vh;
+            padding: 24px;
         }
         
-        .status {
-            display: inline-block;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 0.9rem;
-            font-weight: 500;
-        }
-        
-        .status.connecting {
-            background: #ff9800;
-            color: #000;
-        }
-        
-        .status.connected {
-            background: #00ff88;
-            color: #000;
-        }
-        
-        .status.failed {
-            background: #ff5252;
-            color: #fff;
+        .sidebar {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 14px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            gap: 16px;
         }
         
         #videoContainer {
@@ -61,9 +49,8 @@
             max-width: 1280px;
             width: 100%;
             background: #000;
-            border-radius: 8px;
+            border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 10px 40px rgba(0, 255, 136, 0.3);
         }
         
         #remoteVideo {
@@ -71,124 +58,93 @@
             height: auto;
             display: block;
         }
-        
-        #stats {
-            margin-top: 20px;
-            padding: 20px;
-            background: #2a2a2a;
-            border-radius: 8px;
-            max-width: 1280px;
-            width: 100%;
-        }
-        
-        #stats h2 {
-            font-size: 1.2rem;
-            margin-bottom: 15px;
-            color: #00ff88;
-        }
-        
-        .stat-row {
+
+        .switch {
             display: flex;
+            align-items: center;
             justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid #3a3a3a;
+            gap: 12px;
         }
-        
-        .stat-row:last-child {
-            border-bottom: none;
+
+        .switch-label {
+            font-size: 0.9rem;
+            letter-spacing: 0.02em;
         }
-        
-        .stat-label {
-            color: #888;
+
+        .switch input {
+            display: none;
         }
-        
-        .stat-value {
-            color: #fff;
-            font-weight: 500;
-        }
-        
-        #controls {
-            margin-top: 20px;
-            display: flex;
-            gap: 10px;
-        }
-        
-        button {
-            padding: 10px 20px;
-            font-size: 1rem;
-            border: none;
-            border-radius: 5px;
+
+        .slider {
+            width: 52px;
+            height: 28px;
+            background: var(--accent-off);
+            border-radius: 999px;
+            position: relative;
+            transition: background 0.2s ease;
             cursor: pointer;
-            font-weight: 500;
-            transition: all 0.3s;
         }
-        
-        button:hover {
-            transform: translateY(-2px);
+
+        .slider::after {
+            content: "";
+            width: 22px;
+            height: 22px;
+            background: #ffffff;
+            border-radius: 50%;
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            transition: transform 0.2s ease;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
         }
-        
-        .btn-connect {
-            background: #00ff88;
-            color: #000;
+
+        .switch input:checked + .slider {
+            background: var(--accent);
         }
-        
-        .btn-disconnect {
-            background: #ff5252;
-            color: #fff;
+
+        .switch input:checked + .slider::after {
+            transform: translateX(24px);
+        }
+
+        @media (max-width: 900px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                order: 2;
+                flex-direction: row;
+                align-items: center;
+                justify-content: center;
+            }
+
+            #videoContainer {
+                order: 1;
+            }
         }
     </style>
 </head>
 <body>
-    <header>
-        <h1>QEMU WebRTC Remote Desktop</h1>
-        <div class="status connecting" id="status">接続中...</div>
-    </header>
-    
-    <div id="videoContainer">
-        <video id="remoteVideo" autoplay playsinline></video>
-    </div>
-    
-    <div id="controls">
-        <button class="btn-connect" onclick="connect()">接続</button>
-        <button class="btn-disconnect" onclick="disconnect()">切断</button>
-    </div>
-    
-    <div id="stats">
-        <h2>接続統計</h2>
-        <div class="stat-row">
-            <span class="stat-label">接続状態</span>
-            <span class="stat-value" id="connectionState">-</span>
-        </div>
-        <div class="stat-row">
-            <span class="stat-label">ICE状態</span>
-            <span class="stat-value" id="iceState">-</span>
-        </div>
-        <div class="stat-row">
-            <span class="stat-label">受信フレーム数</span>
-            <span class="stat-value" id="framesReceived">0</span>
-        </div>
-        <div class="stat-row">
-            <span class="stat-label">ビットレート</span>
-            <span class="stat-value" id="bitrate">0 kbps</span>
+    <div class="layout">
+        <aside class="sidebar">
+            <label class="switch">
+                <span class="switch-label">接続</span>
+                <input id="connectSwitch" type="checkbox" checked>
+                <span class="slider" aria-hidden="true"></span>
+            </label>
+        </aside>
+        
+        <div id="videoContainer">
+            <video id="remoteVideo" autoplay playsinline></video>
         </div>
     </div>
     
     <script>
         let pc = null;
         const video = document.getElementById('remoteVideo');
-        const statusEl = document.getElementById('status');
-        
-        // 接続状態の更新
-        function updateStatus(state, message) {
-            statusEl.className = `status ${state}`;
-            statusEl.textContent = message;
-        }
-        
         // WebRTC接続
         async function connect() {
             try {
-                updateStatus('connecting', '接続中...');
-                
                 // RTCPeerConnection作成
                 pc = new RTCPeerConnection({
                     iceServers: []  // ローカル接続なのでSTUN/TURNは不要
@@ -198,21 +154,14 @@
                 pc.ontrack = (event) => {
                     console.log('Track received:', event.track.kind);
                     video.srcObject = event.streams[0];
-                    updateStatus('connected', '接続済み');
                 };
                 
                 pc.onconnectionstatechange = () => {
                     console.log('Connection state:', pc.connectionState);
-                    document.getElementById('connectionState').textContent = pc.connectionState;
-                    
-                    if (pc.connectionState === 'failed') {
-                        updateStatus('failed', '接続失敗');
-                    }
                 };
                 
                 pc.oniceconnectionstatechange = () => {
                     console.log('ICE state:', pc.iceConnectionState);
-                    document.getElementById('iceState').textContent = pc.iceConnectionState;
                 };
                 
                 // ビデオトランシーバーを追加（受信専用）
@@ -257,39 +206,7 @@
                 pc.close();
                 pc = null;
                 video.srcObject = null;
-                updateStatus('connecting', '切断しました');
-                
-                // 統計情報をリセット
-                document.getElementById('framesReceived').textContent = '0';
-                document.getElementById('bitrate').textContent = '0 kbps';
             }
-        }
-        
-        // 統計情報の更新
-        let statsInterval = null;
-        function startStatsUpdate() {
-            if (statsInterval) {
-                clearInterval(statsInterval);
-            }
-            
-            statsInterval = setInterval(async () => {
-                if (!pc) return;
-                
-                try {
-                    const stats = await pc.getStats();
-                    stats.forEach(report => {
-                        if (report.type === 'inbound-rtp' && report.kind === 'video') {
-                            document.getElementById('framesReceived').textContent = report.framesReceived || 0;
-                            
-                            // ビットレート計算（kbps）
-                            const bitrate = Math.round((report.bytesReceived * 8) / 1000);
-                            document.getElementById('bitrate').textContent = `${bitrate} kbps`;
-                        }
-                    });
-                } catch (error) {
-                    console.error('Stats error:', error);
-                }
-            }, 1000);
         }
         
         // ページロード時に自動接続
@@ -298,16 +215,38 @@
             connect();
             setupInputHandlers();
         });
+
+        const connectSwitch = document.getElementById('connectSwitch');
+        connectSwitch.addEventListener('change', () => {
+            if (connectSwitch.checked) {
+                connect();
+            } else {
+                disconnect();
+            }
+        });
         
         // 入力ハンドラのセットアップ
         function setupInputHandlers() {
             const videoContainer = document.getElementById('videoContainer');
+            const USE_RELATIVE_MOUSE = false;
             
             // マウス移動のスロットリング（パフォーマンス改善）
             let lastMouseMove = 0;
             let lastMouseX = -1;
             let lastMouseY = -1;
             const MOUSE_THROTTLE_MS = 50; // 50ms間隔（約20fps）に変更
+
+            function getVideoCoords(event) {
+                if (!video.videoWidth || !video.videoHeight) {
+                    return null;
+                }
+                const rect = video.getBoundingClientRect();
+                const nx = (event.clientX - rect.left) / rect.width;
+                const ny = (event.clientY - rect.top) / rect.height;
+                const xNorm = Math.max(0, Math.min(1, nx));
+                const yNorm = Math.max(0, Math.min(1, ny));
+                return { xNorm, yNorm };
+            }
             
             videoContainer.addEventListener('mousemove', (e) => {
                 const now = Date.now();
@@ -316,95 +255,104 @@
                 if (now - lastMouseMove < MOUSE_THROTTLE_MS) {
                     return;
                 }
-                
-                const rect = video.getBoundingClientRect();
-                const x = Math.floor((e.clientX - rect.left) / rect.width * video.videoWidth);
-                const y = Math.floor((e.clientY - rect.top) / rect.height * video.videoHeight);
-                
+
+                if (USE_RELATIVE_MOUSE) {
+                    const dx = Math.round(e.movementX);
+                    const dy = Math.round(e.movementY);
+
+                    if (dx === 0 && dy === 0) {
+                        return;
+                    }
+
+                    lastMouseMove = now;
+
+                    fetch('/mouse', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ type: 'move_rel', dx, dy })
+                    }).catch(error => console.error('Mouse move error:', error));
+                    return;
+                }
+
+                const coords = getVideoCoords(e);
+                if (!coords) {
+                    return;
+                }
+                const { xNorm, yNorm } = coords;
+
                 // 座標が変わらない場合もスキップ
-                if (x === lastMouseX && y === lastMouseY) {
+                if (xNorm === lastMouseX && yNorm === lastMouseY) {
                     return;
                 }
                 
                 lastMouseMove = now;
-                lastMouseX = x;
-                lastMouseY = y;
-                
+                lastMouseX = xNorm;
+                lastMouseY = yNorm;
+
                 // 非同期送信（応答を待たない - fire-and-forget）
                 fetch('/mouse', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ type: 'move', x, y })
+                    body: JSON.stringify({ type: 'move', x_norm: xNorm, y_norm: yNorm })
                 }).catch(error => console.error('Mouse move error:', error));
             });
             
             // マウスボタン（非同期化）
             videoContainer.addEventListener('mousedown', (e) => {
                 e.preventDefault();
-                const button = e.button + 1; // 0=left → 1, 1=middle → 2, 2=right → 3
+                const button = e.button; // QEMU MouseButton enum: 0=left,1=middle,2=right
+                const coords = getVideoCoords(e);
                 
                 fetch('/mouse', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ type: 'press', button })
+                    body: JSON.stringify({
+                        type: 'press',
+                        button,
+                        x_norm: coords ? coords.xNorm : null,
+                        y_norm: coords ? coords.yNorm : null
+                    })
                 }).catch(error => console.error('Mouse press error:', error));
             });
             
             videoContainer.addEventListener('mouseup', (e) => {
                 e.preventDefault();
-                const button = e.button + 1;
+                const button = e.button;
+                const coords = getVideoCoords(e);
                 
                 fetch('/mouse', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ type: 'release', button })
+                    body: JSON.stringify({
+                        type: 'release',
+                        button,
+                        x_norm: coords ? coords.xNorm : null,
+                        y_norm: coords ? coords.yNorm : null
+                    })
                 }).catch(error => console.error('Mouse release error:', error));
             });
             
             // キーボード（非同期化）
             document.addEventListener('keydown', (e) => {
                 if (!e.repeat) { // リピートイベントは無視
-                    const keycode = keyCodeMap[e.code];
-                    if (keycode) {
-                        e.preventDefault();
-                        fetch('/keyboard', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ type: 'keydown', keycode })
-                        }).catch(error => console.error('Key down error:', error));
-                    }
-                }
-            });
-            
-            document.addEventListener('keyup', (e) => {
-                const keycode = keyCodeMap[e.code];
-                if (keycode) {
                     e.preventDefault();
                     fetch('/keyboard', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ type: 'keyup', keycode })
-                    }).catch(error => console.error('Key up error:', error));
+                        body: JSON.stringify({ type: 'keydown', code: e.code, key: e.key })
+                    }).catch(error => console.error('Key down error:', error));
                 }
             });
+            
+            document.addEventListener('keyup', (e) => {
+                e.preventDefault();
+                fetch('/keyboard', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'keyup', code: e.code, key: e.key })
+                }).catch(error => console.error('Key up error:', error));
+            });
         }
-        
-        // キーコードマップ（JavaScript → QEMU）
-        const keyCodeMap = {
-            'KeyA': 30, 'KeyB': 48, 'KeyC': 46, 'KeyD': 32, 'KeyE': 18,
-            'KeyF': 33, 'KeyG': 34, 'KeyH': 35, 'KeyI': 23, 'KeyJ': 36,
-            'KeyK': 37, 'KeyL': 38, 'KeyM': 50, 'KeyN': 49, 'KeyO': 24,
-            'KeyP': 25, 'KeyQ': 16, 'KeyR': 19, 'KeyS': 31, 'KeyT': 20,
-            'KeyU': 22, 'KeyV': 47, 'KeyW': 17, 'KeyX': 45, 'KeyY': 21,
-            'KeyZ': 44,
-            'Digit0': 11, 'Digit1': 2, 'Digit2': 3, 'Digit3': 4, 'Digit4': 5,
-            'Digit5': 6, 'Digit6': 7, 'Digit7': 8, 'Digit8': 9, 'Digit9': 10,
-            'Space': 57, 'Enter': 28, 'Backspace': 14, 'Tab': 15, 'Escape': 1,
-            'ShiftLeft': 42, 'ShiftRight': 54, 'ControlLeft': 29, 'ControlRight': 97,
-            'AltLeft': 56, 'AltRight': 100, 'MetaLeft': 125, 'MetaRight': 126,
-            'ArrowUp': 103, 'ArrowDown': 108, 'ArrowLeft': 105, 'ArrowRight': 106,
-            'Delete': 111, 'Home': 102, 'End': 107, 'PageUp': 104, 'PageDown': 109
-        };
         
         // ページを離れる時にクリーンアップ
         window.addEventListener('beforeunload', () => {

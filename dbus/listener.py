@@ -8,6 +8,7 @@ import logging
 import mmap
 import numpy as np
 import time
+from .dmabuf_gl import get_renderer
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ class DisplayListener:
             t_receive = time.time()
             
             logger.info(f"Scanout: {width}x{height}, stride={stride}, format=0x{pixman_format:08x}")
-            logger.info(f"[PERF] Scanout受信時刻: {t_receive:.6f}")
+            logger.debug(f"[PERF] Scanout受信時刻: {t_receive:.6f}")
             
             self.current_width = width
             self.current_height = height
@@ -60,7 +61,7 @@ class DisplayListener:
             rgb_frame = self._convert_pixman_to_rgb(data, width, height, stride, pixman_format)
             t2 = time.time()
             
-            logger.info(f"[PERF] RGB変換時間: {(t2-t1)*1000:.1f}ms")
+            logger.debug(f"[PERF] RGB変換時間: {(t2-t1)*1000:.1f}ms")
             
             if rgb_frame is not None:
                 logger.info(f"✓ RGB conversion successful: {rgb_frame.shape}")
@@ -70,8 +71,8 @@ class DisplayListener:
                 self.capture.update_frame_from_listener(rgb_frame)
                 t4 = time.time()
                 
-                logger.info(f"[PERF] update_frame時間: {(t4-t3)*1000:.1f}ms")
-                logger.info(f"[PERF] Scanout総処理時間: {(t4-t_receive)*1000:.1f}ms")
+                logger.debug(f"[PERF] update_frame時間: {(t4-t3)*1000:.1f}ms")
+                logger.debug(f"[PERF] Scanout総処理時間: {(t4-t_receive)*1000:.1f}ms")
                 logger.info(f"✓ Frame sent to capture: {width}x{height}")
             else:
                 logger.error("✗ RGB conversion returned None")
@@ -113,7 +114,7 @@ class DisplayListener:
                 self._update_count += 1
                 
                 if self._update_count % 100 == 0:
-                    logger.info(f"[PERF] Update #{self._update_count}: RGB変換={( t2-t1)*1000:.1f}ms, フレーム更新={(t4-t3)*1000:.1f}ms, 総時間={(t4-t_receive)*1000:.1f}ms")
+                    logger.debug(f"[PERF] Update #{self._update_count}: RGB変換={( t2-t1)*1000:.1f}ms, フレーム更新={(t4-t3)*1000:.1f}ms, 総時間={(t4-t_receive)*1000:.1f}ms")
             else:
                 logger.error(f"Update RGB conversion returned None")
                 
@@ -146,6 +147,7 @@ class DisplayListener:
             self.current_stride = stride
             self.current_dmabuf_fd = fd
             self.current_fourcc = fourcc
+            self.current_modifier = modifier  # ← 追加: modifierを保存
             self.current_y0_top = y0_top  # y0_topを保存
             
             # 既存のマップをクリーンアップ
@@ -183,8 +185,6 @@ class DisplayListener:
             width, height: 更新サイズ
         """
         try:
-            logger.debug(f"UpdateDMABUF: ({x},{y}) {width}x{height}")
-            
             if self.shared_memory is not None:
                 # 保存されたy0_topを使用（デフォルトはTrue）
                 y0_top = getattr(self, 'current_y0_top', True)
@@ -234,8 +234,6 @@ class DisplayListener:
         共有メモリマップの部分更新
         """
         try:
-            logger.debug(f"UpdateMap: ({x},{y}) {width}x{height}")
-            
             if self.shared_memory is not None:
                 self._update_from_shared_memory()
                 
@@ -288,7 +286,7 @@ class DisplayListener:
                 rgb = pixels[:, :, [2, 1, 0]].copy()
                 
                 t_end = time.time()
-                logger.info(f"[PERF-RGB] RGB変換合計: {(t_end-t_start)*1000:.1f}ms")
+                logger.debug(f"[PERF-RGB] RGB変換合計: {(t_end-t_start)*1000:.1f}ms")
                 
                 return rgb
                 
@@ -335,38 +333,45 @@ class DisplayListener:
             
             logger.info(f"Reading from DMA-BUF: fourcc=0x{fourcc:08x}, size={self.current_stride * self.current_height}, y0_top={y0_top}")
             
-            # DMA-BUFからデータ読み込み
-            size = self.current_stride * self.current_height
-            self.shared_memory.seek(0)
-            data = self.shared_memory.read(size)
+            # Try EGL-based OpenGL rendering first
+            renderer = get_renderer()
+            if not renderer.initialized:
+                renderer.initialize()
             
-            logger.info(f"✓ Read {len(data)} bytes from DMA-BUF")
-            
-            # Fourcc → RGB変換
-            rgb_frame = self._convert_fourcc_to_rgb(
-                data,
+            rgb_frame = renderer.render_from_dmabuf(
+                self.current_dmabuf_fd,
                 self.current_width,
                 self.current_height,
                 self.current_stride,
-                fourcc
+                fourcc,
+                self.current_modifier
             )
             
             if rgb_frame is not None:
-                # y0_top=False の場合、画像を上下反転
-                if not y0_top:
-                    logger.info("⚠ y0_top=False detected, flipping image vertically")
-                    rgb_frame = np.flipud(rgb_frame)
+                logger.info("✓ EGL OpenGL rendering successful")
+            else:
+                logger.warning("EGL rendering failed, falling back to CPU processing")
+                # Fallback to CPU processing
+                size = self.current_stride * self.current_height
+                self.shared_memory.seek(0)
+                data = self.shared_memory.read(size)
                 
-                # デバッグ: 2回目以降のフレーム（実際のコンテンツ）を保存
-                if not hasattr(self, '_debug_saved') or not self._debug_saved:
-                    # 黒画面でなければ保存
-                    if rgb_frame.max() > 10:  # 完全に黒でなければ
-                        from PIL import Image
-                        debug_path = "/tmp/dmabuf_debug.png"
-                        img = Image.fromarray(rgb_frame, 'RGB')
-                        img.save(debug_path)
-                        logger.info(f"🔍 DEBUG: Saved frame to {debug_path} (max pixel value: {rgb_frame.max()})")
-                        self._debug_saved = True
+                logger.info(f"✓ Read {len(data)} bytes from DMA-BUF")
+                
+                # Fourcc → RGB変換
+                rgb_frame = self._convert_fourcc_to_rgb(
+                    data,
+                    self.current_width,
+                    self.current_height,
+                    self.current_stride,
+                    fourcc
+                )
+            
+            if rgb_frame is not None:
+                # y0_top=True の場合、画像を上下反転
+                if y0_top:
+                    logger.info("⚠ y0_top=True detected, flipping image vertically")
+                    rgb_frame = np.flipud(rgb_frame)
                 
                 logger.info(f"✓ RGB conversion successful: {rgb_frame.shape}")
                 self.capture.update_frame_from_listener(rgb_frame)
@@ -411,11 +416,6 @@ class DisplayListener:
                         rgb[y, x, 0] = data_array[pixel_offset + 2]  # R
                         rgb[y, x, 1] = data_array[pixel_offset + 1]  # G
                         rgb[y, x, 2] = data_array[pixel_offset + 0]  # B
-                
-                # デバッグ: 最初の5ピクセルを確認
-                if height > 0 and width > 0:
-                    logger.info(f"First 5 pixels RGB: {rgb[0, :5, :]}")
-                    logger.info(f"Last 5 pixels RGB: {rgb[-1, -5:, :]}")
                 
                 t_end = time.time()
                 logger.info(f"✓ Fourcc conversion complete: {(t_end-t_start)*1000:.1f}ms")

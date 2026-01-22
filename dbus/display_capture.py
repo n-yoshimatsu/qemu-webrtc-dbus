@@ -307,6 +307,13 @@ class DisplayCapture:
         
         # 更新なし → Noneを返す（VideoTrackが前フレームを再送）
         return None
+
+    async def get_latest_frame_copy(self) -> Optional[np.ndarray]:
+        """最新フレームのコピーを返す（イベント待ちなし）"""
+        async with self.frame_lock:
+            if self.current_frame is not None:
+                return self.current_frame.copy()
+        return None
     
     # ========== 入力メソッド（ステップ3から継承） ==========
     
@@ -318,13 +325,20 @@ class DisplayCapture:
                 # ログなし（頻繁すぎるため）
         except Exception as e:
             logger.error(f"Mouse move error: {e}")
+
+    def send_mouse_rel(self, dx: int, dy: int):
+        """マウス相対移動"""
+        try:
+            if self.mouse_proxy:
+                self.mouse_proxy.RelMotion(dx, dy)
+        except Exception as e:
+            logger.error(f"Mouse rel motion error: {e}")
     
     def send_mouse_press(self, button: int):
         """マウスボタン押下"""
         try:
             if self.mouse_proxy:
                 self.mouse_proxy.Press(button)
-                logger.debug(f"Mouse press: {button}")
         except Exception as e:
             logger.error(f"Mouse press error: {e}")
     
@@ -333,7 +347,6 @@ class DisplayCapture:
         try:
             if self.mouse_proxy:
                 self.mouse_proxy.Release(button)
-                logger.debug(f"Mouse release: {button}")
         except Exception as e:
             logger.error(f"Mouse release error: {e}")
     

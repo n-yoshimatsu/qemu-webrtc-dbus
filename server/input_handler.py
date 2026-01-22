@@ -7,6 +7,7 @@ Input Handler for WebRTC
 import logging
 import time
 from aiohttp import web
+from dbus.keymap import js_code_to_qemu
 
 logger = logging.getLogger(__name__)
 
@@ -44,39 +45,69 @@ class InputHandler:
             
             if event_type == 'move':
                 # マウス移動
-                x = int(data.get('x', 0))
-                y = int(data.get('y', 0))
-                
+                x_norm = data.get('x_norm')
+                y_norm = data.get('y_norm')
+                if x_norm is None or y_norm is None:
+                    x = int(data.get('x', 0))
+                    y = int(data.get('y', 0))
+                else:
+                    x = int(max(0, min(1, float(x_norm))) * (self.display_capture.width - 1))
+                    y = int(max(0, min(1, float(y_norm))) * (self.display_capture.height - 1))
+
                 t2 = time.time()
                 self.display_capture.send_mouse_move(x, y)
                 t3 = time.time()
-                
+
                 # 100回に1回だけログ（頻繁すぎるため）
                 self._mouse_move_count += 1
                 if self._mouse_move_count % 100 == 0:
-                    logger.info(f"[PERF-MOUSE] #{self._mouse_move_count}: 受信→JSON解析={(t1-t_receive)*1000:.1f}ms, D-Bus送信={(t3-t2)*1000:.1f}ms, 総時間={(t3-t_receive)*1000:.1f}ms")
+                    logger.debug(f"[PERF-MOUSE] #{self._mouse_move_count}: 受信→JSON解析={(t1-t_receive)*1000:.1f}ms, D-Bus送信={(t3-t2)*1000:.1f}ms, 総時間={(t3-t_receive)*1000:.1f}ms")
+            elif event_type == 'move_rel':
+                # マウス相対移動
+                dx = int(data.get('dx', 0))
+                dy = int(data.get('dy', 0))
+
+                t2 = time.time()
+                self.display_capture.send_mouse_rel(dx, dy)
+                t3 = time.time()
+
+                self._mouse_move_count += 1
+                if self._mouse_move_count % 100 == 0:
+                    logger.debug(f"[PERF-MOUSE] #{self._mouse_move_count}: 受信→JSON解析={(t1-t_receive)*1000:.1f}ms, D-Bus送信={(t3-t2)*1000:.1f}ms, 総時間={(t3-t_receive)*1000:.1f}ms")
                 
             elif event_type == 'press':
                 # マウスボタン押下
                 button = int(data.get('button', 1))
+                x_norm = data.get('x_norm')
+                y_norm = data.get('y_norm')
                 
                 t2 = time.time()
+                if x_norm is not None and y_norm is not None:
+                    x = int(max(0, min(1, float(x_norm))) * (self.display_capture.width - 1))
+                    y = int(max(0, min(1, float(y_norm))) * (self.display_capture.height - 1))
+                    self.display_capture.send_mouse_move(x, y)
                 self.display_capture.send_mouse_press(button)
                 t3 = time.time()
                 
                 logger.info(f"Mouse press: {button}")
-                logger.info(f"[PERF-MOUSE] Press: D-Bus送信={(t3-t2)*1000:.1f}ms")
+                logger.debug(f"[PERF-MOUSE] Press: D-Bus送信={(t3-t2)*1000:.1f}ms")
                 
             elif event_type == 'release':
                 # マウスボタン解放
                 button = int(data.get('button', 1))
+                x_norm = data.get('x_norm')
+                y_norm = data.get('y_norm')
                 
                 t2 = time.time()
+                if x_norm is not None and y_norm is not None:
+                    x = int(max(0, min(1, float(x_norm))) * (self.display_capture.width - 1))
+                    y = int(max(0, min(1, float(y_norm))) * (self.display_capture.height - 1))
+                    self.display_capture.send_mouse_move(x, y)
                 self.display_capture.send_mouse_release(button)
                 t3 = time.time()
                 
                 logger.info(f"Mouse release: {button}")
-                logger.info(f"[PERF-MOUSE] Release: D-Bus送信={(t3-t2)*1000:.1f}ms")
+                logger.debug(f"[PERF-MOUSE] Release: D-Bus送信={(t3-t2)*1000:.1f}ms")
             
             return web.json_response({'status': 'ok'})
             
@@ -97,7 +128,23 @@ class InputHandler:
         try:
             data = await request.json()
             event_type = data.get('type')
-            keycode = int(data.get('keycode', 0))
+            code = data.get('code')
+            key = data.get('key')
+
+            keycode = None
+            if code:
+                keycode = js_code_to_qemu(code)
+
+            special_key_map = {
+                '\\': 124,  # IntlYen
+                '|': 124,   # IntlYen with shift
+                '¥': 124,   # Yen key
+            }
+            if keycode is None and key in special_key_map:
+                keycode = special_key_map[key]
+
+            if keycode is None:
+                keycode = int(data.get('keycode', 0))
             
             if event_type == 'keydown':
                 # キー押下

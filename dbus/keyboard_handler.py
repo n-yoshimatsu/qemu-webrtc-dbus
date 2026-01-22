@@ -22,8 +22,6 @@ class KeyboardHandler:
                 logger.warning(f"Unknown key: {js_code}")
                 return
             
-            logger.debug(f"Keyboard: {js_code} -> {qemu_code}, press={is_press}")
-                
             kbd_proxy = self.bus.get_proxy(
                 "org.qemu",
                 self.console_path,
