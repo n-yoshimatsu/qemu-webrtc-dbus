@@ -7,6 +7,7 @@ QEMUからの画面更新を受信する（GLib/Gio経由）
 import logging
 import mmap
 import numpy as np
+import os
 import time
 from .dmabuf_gl import get_renderer
 
@@ -30,8 +31,18 @@ class DisplayListener:
         self.current_y0_top = True  # デフォルトは上から下
         self.shared_memory = None
         self.shared_fd = None
+        self.current_dmabuf_fd = None
         
         logger.info("DisplayListener initialized")
+
+    def _close_fd(self, fd, label):
+        if fd is None:
+            return
+        try:
+            os.close(fd)
+            logger.info(f"Closed {label} fd={fd}")
+        except OSError as e:
+            logger.warning(f"Failed to close {label} fd={fd}: {e}")
     
     def Scanout(self, width, height, stride, pixman_format, data):
         """
@@ -145,6 +156,9 @@ class DisplayListener:
             self.current_width = width
             self.current_height = height
             self.current_stride = stride
+            # Replace previous DMA-BUF fd to avoid leaking fds
+            if self.current_dmabuf_fd is not None and self.current_dmabuf_fd != fd:
+                self._close_fd(self.current_dmabuf_fd, "dmabuf(previous)")
             self.current_dmabuf_fd = fd
             self.current_fourcc = fourcc
             self.current_modifier = modifier  # ← 追加: modifierを保存
@@ -215,6 +229,9 @@ class DisplayListener:
             # 既存のマップをクリーンアップ
             if self.shared_memory is not None:
                 self.shared_memory.close()
+                self.shared_memory = None
+            if self.shared_fd is not None and self.shared_fd != handle:
+                self._close_fd(self.shared_fd, "shared_map(previous)")
             
             # 共有メモリをmmap
             size = stride * height
@@ -247,6 +264,12 @@ class DisplayListener:
         if self.shared_memory is not None:
             self.shared_memory.close()
             self.shared_memory = None
+        if self.shared_fd is not None:
+            self._close_fd(self.shared_fd, "shared_map")
+            self.shared_fd = None
+        if self.current_dmabuf_fd is not None:
+            self._close_fd(self.current_dmabuf_fd, "dmabuf")
+            self.current_dmabuf_fd = None
     
     def MouseSet(self, x, y, on):
         """マウスカーソル位置設定（オプション）"""
