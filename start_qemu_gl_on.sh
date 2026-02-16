@@ -12,7 +12,7 @@ IMG_DIR="${WDIR}/demo"
 IMG="${IMG_DIR}/noble-server-cloudimg-arm64.img"
 SEED="${IMG_DIR}/seed.iso"
 
-SOCKET_PATH="/tmp/qemu_gl_on.sock"
+SOCKET_PATH="/tmp/qemu_dbus.sock"
 QEMU_LOG="/tmp/qemu_gl_on_stdout.log"
 QEMU_ERR="/tmp/qemu_gl_on_stderr.log"
 SERIAL_LOG="/tmp/qemu_gl_on_serial.log"
