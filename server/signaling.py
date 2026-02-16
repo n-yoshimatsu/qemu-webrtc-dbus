@@ -102,6 +102,9 @@ class SignalingServer:
             # Answer作成
             answer = await pc.createAnswer()
             await pc.setLocalDescription(answer)
+
+            # non-trickle運用のため、回答SDP返却前にICE候補収集完了を待つ
+            await self._wait_for_ice_gathering_complete(pc)
             
             logger.info("Answer created and sent")
             
@@ -118,6 +121,24 @@ class SignalingServer:
                 {'error': str(e)},
                 status=500
             )
+
+    async def _wait_for_ice_gathering_complete(self, pc: RTCPeerConnection, timeout: float = 8.0):
+        """ICE候補収集完了を待つ（timeout時は現時点の候補で続行）"""
+        if pc.iceGatheringState == "complete":
+            return
+
+        import asyncio
+        done = asyncio.Event()
+
+        @pc.on("icegatheringstatechange")
+        async def on_icegatheringstatechange():
+            if pc.iceGatheringState == "complete":
+                done.set()
+
+        try:
+            await asyncio.wait_for(done.wait(), timeout=timeout)
+        except asyncio.TimeoutError:
+            logger.warning("ICE gathering timeout; returning current localDescription")
     
     async def cleanup_pc(self, pc: RTCPeerConnection):
         """

@@ -14,7 +14,7 @@ if [[ ! -x "${START_SCRIPT}" ]]; then
 fi
 
 # Align with QEMU launcher socket name.
-export SOCKET_PATH="${SOCKET_PATH:-/tmp/qemu_gl_on.sock}"
+export SOCKET_PATH="${SOCKET_PATH:-/tmp/qemu_dbus.sock}"
 
 # Ignore stale JSON ICE config from previous shells.
 unset QEMU_WEBRTC_ICE_SERVERS || true

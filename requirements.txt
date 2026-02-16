@@ -21,11 +21,10 @@ propcache==0.4.1
 pycairo==1.29.0
 pycparser==2.23
 pyee==13.0.0
-PyGObject==3.54.5
 pylibsrtp==1.0.0
 PyOpenGL==3.1.10
 PyOpenGL-accelerate==3.1.10
 pyOpenSSL==25.3.0
-PyQt5==5.15.11
 typing_extensions==4.15.0
 yarl==1.22.0
+pyGObject==3.54.5

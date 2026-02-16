@@ -12,7 +12,7 @@ if [[ ! -x "${PYTHON_BIN}" ]]; then
 fi
 
 # QEMU D-Bus socket (aligned with QEMU launch script)
-SOCKET_PATH="${SOCKET_PATH:-/tmp/qemu_gl_on.sock}"
+SOCKET_PATH="${SOCKET_PATH:-/tmp/qemu_dbus.sock}"
 if [[ ! -S "${SOCKET_PATH}" ]]; then
   echo "Error: QEMU D-Bus socket not found: ${SOCKET_PATH}"
   exit 1

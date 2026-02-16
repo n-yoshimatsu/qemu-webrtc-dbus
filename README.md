@@ -61,7 +61,7 @@ qemu-system-x86_64 \
 ```
 
 `run_server.sh` は以下を自動化します。
-- QEMU D-Bus ソケット (`/tmp/qemu_gl_on.sock`) 設定
+- QEMU D-Bus ソケット (`/tmp/qemu_dbus.sock`) 設定
 - AWS IMDS から TURN ホスト (Public IPv4) 取得
 - `/etc/turnserver.conf` の `user=` から TURN 認証情報取得
 - `ICE_TRANSPORT_POLICY=relay` の適用
@@ -72,7 +72,7 @@ qemu-system-x86_64 \
 ./start_webrtc_server.sh
 ```
 
-`SOCKET_PATH` 未指定時は `/tmp/qemu_gl_on.sock` を使います。
+`SOCKET_PATH` 未指定時は `/tmp/qemu_dbus.sock` を使います。
 
 TURN を使う場合:
 
