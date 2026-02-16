@@ -73,21 +73,25 @@ export DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/qemu_dbus.sock
   WebRTC の ICE サーバー設定（JSON配列文字列）
 - `QEMU_WEBRTC_ICE_TRANSPORT_POLICY`  
   ICEポリシー。`all` または `relay`
+- `QEMU_WEBRTC_TURN_HOST`  
+  TURNホスト名またはPublic IP（`QEMU_WEBRTC_ICE_SERVERS` 未指定時に利用）
+- `QEMU_WEBRTC_TURN_USERNAME`  
+  TURNユーザー名（既定: `webrtc`）
+- `QEMU_WEBRTC_TURN_CREDENTIAL`  
+  TURNパスワード
+- `QEMU_WEBRTC_TURN_TRANSPORTS`  
+  `udp,tcp` のようなカンマ区切り（既定: `udp,tcp`）
+- `QEMU_WEBRTC_STUN_URL`  
+  任意のSTUN URL（例: `stun:stun.l.google.com:19302`）
 
 TURN を使う例:
 
 ```bash
-export QEMU_WEBRTC_ICE_SERVERS='[
-  {"urls":"stun:stun.l.google.com:19302"},
-  {
-    "urls":[
-      "turn:YOUR_TURN_HOST:3478?transport=udp",
-      "turn:YOUR_TURN_HOST:3478?transport=tcp"
-    ],
-    "username":"webrtc",
-    "credential":"strongpassword"
-  }
-]'
+export QEMU_WEBRTC_TURN_HOST=54.12.34.56
+export QEMU_WEBRTC_TURN_USERNAME=webrtc
+export QEMU_WEBRTC_TURN_CREDENTIAL='strongpassword'
+export QEMU_WEBRTC_TURN_TRANSPORTS=udp,tcp
+export QEMU_WEBRTC_STUN_URL='stun:stun.l.google.com:19302'
 export QEMU_WEBRTC_ICE_TRANSPORT_POLICY=all
 ```
 
@@ -96,6 +100,9 @@ TURN経由のみで検証したい場合:
 ```bash
 export QEMU_WEBRTC_ICE_TRANSPORT_POLICY=relay
 ```
+
+`/webrtc-config` にプレースホルダ（`YOUR_TURN_HOST` / `<...>`）が含まれる場合、
+クライアントは接続を開始せず、設定エラーを表示します。
 
 ## プロジェクト構成
 

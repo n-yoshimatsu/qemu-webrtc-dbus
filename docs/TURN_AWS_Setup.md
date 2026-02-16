@@ -74,17 +74,11 @@ TURN サーバー側で以下を許可してください。
 WebRTC サーバー起動前に環境変数を設定します。
 
 ```bash
-export QEMU_WEBRTC_ICE_SERVERS='[
-  {"urls":"stun:stun.l.google.com:19302"},
-  {
-    "urls":[
-      "turn:turn.example.com:3478?transport=udp",
-      "turn:turn.example.com:3478?transport=tcp"
-    ],
-    "username":"webrtc",
-    "credential":"strongpassword"
-  }
-]'
+export QEMU_WEBRTC_TURN_HOST=turn.example.com
+export QEMU_WEBRTC_TURN_USERNAME=webrtc
+export QEMU_WEBRTC_TURN_CREDENTIAL='strongpassword'
+export QEMU_WEBRTC_TURN_TRANSPORTS=udp,tcp
+export QEMU_WEBRTC_STUN_URL='stun:stun.l.google.com:19302'
 export QEMU_WEBRTC_ICE_TRANSPORT_POLICY=all
 ```
 
@@ -93,6 +87,9 @@ export QEMU_WEBRTC_ICE_TRANSPORT_POLICY=all
 ```bash
 export QEMU_WEBRTC_ICE_TRANSPORT_POLICY=relay
 ```
+
+`/webrtc-config` に `YOUR_TURN_HOST` や `<...>` が残っている場合は設定エラーとして扱われ、
+ブラウザ側で接続を開始しません。
 
 ## 8. 動作確認ポイント
 

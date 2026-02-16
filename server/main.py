@@ -39,7 +39,26 @@ logging.getLogger('dbus.dmabuf_gl').setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
-def _load_webrtc_config():
+def _contains_placeholder(value: str) -> bool:
+    lower = value.lower()
+    return (
+        "your_turn_host" in lower
+        or "turn_public_ip_or_dns" in lower
+        or "your_public_ip" in lower
+        or "<" in value
+        or ">" in value
+    )
+
+
+def _normalize_urls(urls):
+    if isinstance(urls, str):
+        return [urls]
+    if isinstance(urls, list) and all(isinstance(item, str) for item in urls):
+        return urls
+    return None
+
+
+def _load_webrtc_config_payload():
     """
     WebRTC ICE設定を環境変数から読み込む。
 
@@ -51,8 +70,16 @@ def _load_webrtc_config():
 
     QEMU_WEBRTC_ICE_TRANSPORT_POLICY:
       "all" または "relay"（省略時は未指定）
+
+    代替（JSONを使わない設定）:
+      QEMU_WEBRTC_TURN_HOST
+      QEMU_WEBRTC_TURN_USERNAME (default: webrtc)
+      QEMU_WEBRTC_TURN_CREDENTIAL
+      QEMU_WEBRTC_TURN_TRANSPORTS (default: udp,tcp)
+      QEMU_WEBRTC_STUN_URL (optional)
     """
     config = {"iceServers": []}
+    errors = []
 
     ice_servers_raw = os.environ.get("QEMU_WEBRTC_ICE_SERVERS", "").strip()
     if ice_servers_raw:
@@ -61,17 +88,67 @@ def _load_webrtc_config():
             if isinstance(parsed, list):
                 config["iceServers"] = parsed
             else:
-                logger.warning("QEMU_WEBRTC_ICE_SERVERS must be a JSON array; ignored")
+                errors.append("QEMU_WEBRTC_ICE_SERVERS must be a JSON array")
         except json.JSONDecodeError as e:
-            logger.warning(f"Invalid QEMU_WEBRTC_ICE_SERVERS JSON; ignored: {e}")
+            errors.append(f"Invalid QEMU_WEBRTC_ICE_SERVERS JSON: {e}")
+    else:
+        turn_host = os.environ.get("QEMU_WEBRTC_TURN_HOST", "").strip()
+        turn_username = os.environ.get("QEMU_WEBRTC_TURN_USERNAME", "webrtc").strip()
+        turn_credential = os.environ.get("QEMU_WEBRTC_TURN_CREDENTIAL", "").strip()
+        turn_transports = os.environ.get("QEMU_WEBRTC_TURN_TRANSPORTS", "udp,tcp").strip()
+        stun_url = os.environ.get("QEMU_WEBRTC_STUN_URL", "").strip()
+
+        if turn_host:
+            if _contains_placeholder(turn_host):
+                errors.append("QEMU_WEBRTC_TURN_HOST contains placeholder text")
+            if not turn_credential:
+                errors.append("QEMU_WEBRTC_TURN_CREDENTIAL is required when QEMU_WEBRTC_TURN_HOST is set")
+            transports = [item.strip() for item in turn_transports.split(",") if item.strip()]
+            if not transports:
+                transports = ["udp", "tcp"]
+            turn_urls = [f"turn:{turn_host}:3478?transport={transport}" for transport in transports]
+            if stun_url:
+                config["iceServers"].append({"urls": stun_url})
+            config["iceServers"].append({
+                "urls": turn_urls,
+                "username": turn_username,
+                "credential": turn_credential,
+            })
 
     policy = os.environ.get("QEMU_WEBRTC_ICE_TRANSPORT_POLICY", "").strip()
     if policy in {"all", "relay"}:
         config["iceTransportPolicy"] = policy
     elif policy:
-        logger.warning("QEMU_WEBRTC_ICE_TRANSPORT_POLICY must be 'all' or 'relay'; ignored")
+        errors.append("QEMU_WEBRTC_ICE_TRANSPORT_POLICY must be 'all' or 'relay'")
 
-    return config
+    # ICE server content validation
+    for idx, server in enumerate(config.get("iceServers", [])):
+        if not isinstance(server, dict):
+            errors.append(f"iceServers[{idx}] must be object")
+            continue
+        normalized_urls = _normalize_urls(server.get("urls"))
+        if normalized_urls is None:
+            errors.append(f"iceServers[{idx}].urls must be string or string[]")
+            continue
+        if any(_contains_placeholder(url) for url in normalized_urls):
+            errors.append(f"iceServers[{idx}].urls contains placeholder text")
+        if any(url.startswith("turn:") for url in normalized_urls):
+            if not server.get("username"):
+                errors.append(f"iceServers[{idx}] turn URL requires username")
+            if not server.get("credential"):
+                errors.append(f"iceServers[{idx}] turn URL requires credential")
+
+    payload = {
+        "iceServers": config.get("iceServers", []),
+        "errors": errors,
+    }
+    if "iceTransportPolicy" in config:
+        payload["iceTransportPolicy"] = config["iceTransportPolicy"]
+
+    if errors:
+        for err in errors:
+            logger.error(f"WebRTC config error: {err}")
+    return payload
 
 
 async def wait_for_initial_frame(display_capture):
@@ -132,7 +209,7 @@ async def main():
     
     # aiohttp Application作成
     app = web.Application()
-    app["webrtc_config"] = _load_webrtc_config()
+    app["webrtc_config"] = _load_webrtc_config_payload()
     app.router.add_get('/', index)
     app.router.add_get('/webrtc-config', webrtc_config)
     app.router.add_post('/offer', signaling.handle_offer)
