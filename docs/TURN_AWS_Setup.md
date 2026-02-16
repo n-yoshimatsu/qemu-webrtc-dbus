@@ -82,6 +82,9 @@ export QEMU_WEBRTC_STUN_URL='stun:stun.l.google.com:19302'
 export QEMU_WEBRTC_ICE_TRANSPORT_POLICY=all
 ```
 
+`start_webrtc_server.sh` を使う場合、`TURN_HOST` を省略すると
+AWS IMDS から Public IPv4 を自動取得できます。
+
 疎通確認時は TURN 強制:
 
 ```bash

@@ -54,9 +54,41 @@ qemu-system-x86_64 \
 
 ### 2. WebRTC サーバーを起動
 
+推奨（自動設定）:
+
 ```bash
-export DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/qemu_dbus.sock
-./venv/bin/python server/main.py
+./run_server.sh
+```
+
+`run_server.sh` は以下を自動化します。
+- QEMU D-Bus ソケット (`/tmp/qemu_gl_on.sock`) 設定
+- AWS IMDS から TURN ホスト (Public IPv4) 取得
+- `/etc/turnserver.conf` の `user=` から TURN 認証情報取得
+- `ICE_TRANSPORT_POLICY=relay` の適用
+
+手動設定したい場合:
+
+```bash
+./start_webrtc_server.sh
+```
+
+`SOCKET_PATH` 未指定時は `/tmp/qemu_gl_on.sock` を使います。
+
+TURN を使う場合:
+
+```bash
+TURN_USERNAME=webrtc \
+TURN_CREDENTIAL='strongpassword' \
+ICE_TRANSPORT_POLICY=relay \
+./start_webrtc_server.sh
+```
+
+`TURN_HOST` 未指定時は、`start_webrtc_server.sh` が AWS IMDS
+(`169.254.169.254`) から Public IPv4 を自動取得して使用します。
+自動取得を無効化する場合:
+
+```bash
+AUTO_TURN_HOST=0 ./start_webrtc_server.sh
 ```
 
 ### 3. ブラウザでアクセス
