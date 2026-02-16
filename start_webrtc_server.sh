@@ -42,6 +42,23 @@ detect_public_ip() {
   curl -fsS -m 2 "http://169.254.169.254/latest/meta-data/public-ipv4" 2>/dev/null || true
 }
 
+detect_turn_user_pass() {
+  local conf="${TURN_CONF_PATH:-/etc/turnserver.conf}"
+  [[ -r "${conf}" ]] || return 1
+
+  # First non-comment "user=username:password" line.
+  local line
+  line="$(grep -E '^[[:space:]]*user=[^:#]+:.+$' "${conf}" | head -n1 || true)"
+  [[ -n "${line}" ]] || return 1
+
+  line="${line#*=}"
+  local username="${line%%:*}"
+  local password="${line#*:}"
+
+  [[ -n "${username}" && -n "${password}" ]] || return 1
+  printf '%s\n' "${username}"$'\t'"${password}"
+}
+
 # Optional TURN configuration
 # Enable by setting TURN_HOST (or pre-set QEMU_WEBRTC_ICE_SERVERS directly).
 if [[ -z "${QEMU_WEBRTC_ICE_SERVERS:-}" ]]; then
@@ -55,6 +72,14 @@ if [[ -z "${QEMU_WEBRTC_ICE_SERVERS:-}" ]]; then
 fi
 
 if [[ -n "${TURN_HOST:-}" ]]; then
+  if [[ -z "${TURN_USERNAME:-}" || -z "${TURN_CREDENTIAL:-}" ]]; then
+    creds="$(detect_turn_user_pass || true)"
+    if [[ -n "${creds}" ]]; then
+      export TURN_USERNAME="${TURN_USERNAME:-${creds%%$'\t'*}}"
+      export TURN_CREDENTIAL="${TURN_CREDENTIAL:-${creds#*$'\t'}}"
+    fi
+  fi
+
   export QEMU_WEBRTC_TURN_HOST="${TURN_HOST}"
   export QEMU_WEBRTC_TURN_USERNAME="${TURN_USERNAME:-webrtc}"
   export QEMU_WEBRTC_TURN_CREDENTIAL="${TURN_CREDENTIAL:-}"
