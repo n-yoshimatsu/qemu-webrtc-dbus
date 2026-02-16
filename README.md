@@ -69,6 +69,33 @@ export DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/qemu_dbus.sock
   QEMU の D-Bus ソケットに接続するためのアドレス
 - `QEMU_WEBRTC_DOWNSAMPLE`  
   `1` で 1/2 ダウンサンプル（既定は `0` でフル解像度）
+- `QEMU_WEBRTC_ICE_SERVERS`  
+  WebRTC の ICE サーバー設定（JSON配列文字列）
+- `QEMU_WEBRTC_ICE_TRANSPORT_POLICY`  
+  ICEポリシー。`all` または `relay`
+
+TURN を使う例:
+
+```bash
+export QEMU_WEBRTC_ICE_SERVERS='[
+  {"urls":"stun:stun.l.google.com:19302"},
+  {
+    "urls":[
+      "turn:YOUR_TURN_HOST:3478?transport=udp",
+      "turn:YOUR_TURN_HOST:3478?transport=tcp"
+    ],
+    "username":"webrtc",
+    "credential":"strongpassword"
+  }
+]'
+export QEMU_WEBRTC_ICE_TRANSPORT_POLICY=all
+```
+
+TURN経由のみで検証したい場合:
+
+```bash
+export QEMU_WEBRTC_ICE_TRANSPORT_POLICY=relay
+```
 
 ## プロジェクト構成
 
@@ -100,5 +127,5 @@ qemu-webrtc-dbus/
 ## 詳細ドキュメント
 
 - D-Bus 出力の詳細: `docs/QEMU_DBus_Display.md`
+- TURN 構築手順 (AWS): `docs/TURN_AWS_Setup.md`
 - 調査ログ: `Performance_Issue_v5.md`
-

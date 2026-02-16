@@ -5,7 +5,9 @@ QEMU D-Bus DisplayをWebRTCでブラウザに配信
 """
 
 import asyncio
+import json
 import logging
+import os
 import sys
 from pathlib import Path
 from aiohttp import web
@@ -37,6 +39,41 @@ logging.getLogger('dbus.dmabuf_gl').setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
+def _load_webrtc_config():
+    """
+    WebRTC ICE設定を環境変数から読み込む。
+
+    QEMU_WEBRTC_ICE_SERVERS:
+      JSON配列文字列。例:
+      [{"urls":"stun:stun.l.google.com:19302"},
+       {"urls":["turn:turn.example.com:3478?transport=udp","turn:turn.example.com:3478?transport=tcp"],
+        "username":"user","credential":"pass"}]
+
+    QEMU_WEBRTC_ICE_TRANSPORT_POLICY:
+      "all" または "relay"（省略時は未指定）
+    """
+    config = {"iceServers": []}
+
+    ice_servers_raw = os.environ.get("QEMU_WEBRTC_ICE_SERVERS", "").strip()
+    if ice_servers_raw:
+        try:
+            parsed = json.loads(ice_servers_raw)
+            if isinstance(parsed, list):
+                config["iceServers"] = parsed
+            else:
+                logger.warning("QEMU_WEBRTC_ICE_SERVERS must be a JSON array; ignored")
+        except json.JSONDecodeError as e:
+            logger.warning(f"Invalid QEMU_WEBRTC_ICE_SERVERS JSON; ignored: {e}")
+
+    policy = os.environ.get("QEMU_WEBRTC_ICE_TRANSPORT_POLICY", "").strip()
+    if policy in {"all", "relay"}:
+        config["iceTransportPolicy"] = policy
+    elif policy:
+        logger.warning("QEMU_WEBRTC_ICE_TRANSPORT_POLICY must be 'all' or 'relay'; ignored")
+
+    return config
+
+
 async def wait_for_initial_frame(display_capture):
     """初期フレームをバックグラウンドで待機"""
     try:
@@ -54,6 +91,11 @@ async def index(request):
     """インデックスページ"""
     content = Path(__file__).parent.parent / 'client' / 'index.html'
     return web.FileResponse(content)
+
+
+async def webrtc_config(request):
+    """WebRTC ICE設定を返す"""
+    return web.json_response(request.app["webrtc_config"])
 
 
 async def main():
@@ -90,7 +132,9 @@ async def main():
     
     # aiohttp Application作成
     app = web.Application()
+    app["webrtc_config"] = _load_webrtc_config()
     app.router.add_get('/', index)
+    app.router.add_get('/webrtc-config', webrtc_config)
     app.router.add_post('/offer', signaling.handle_offer)
     app.router.add_post('/mouse', input_handler.handle_mouse)
     app.router.add_post('/keyboard', input_handler.handle_keyboard)

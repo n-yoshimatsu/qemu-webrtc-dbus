@@ -142,13 +142,38 @@
     <script>
         let pc = null;
         const video = document.getElementById('remoteVideo');
+        
+        function startStatsUpdate() {
+            // 統計表示UIは未実装のため no-op
+        }
+
+        function updateStatus(_status, message) {
+            console.warn(message);
+        }
+
+        async function loadWebRTCConfig() {
+            try {
+                const response = await fetch('/webrtc-config');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const config = await response.json();
+                if (config && typeof config === 'object') {
+                    return config;
+                }
+            } catch (error) {
+                console.warn('Failed to load /webrtc-config, fallback to default:', error);
+            }
+            return { iceServers: [] };
+        }
+
         // WebRTC接続
         async function connect() {
             try {
+                const rtcConfig = await loadWebRTCConfig();
+                
                 // RTCPeerConnection作成
-                pc = new RTCPeerConnection({
-                    iceServers: []  // ローカル接続なのでSTUN/TURNは不要
-                });
+                pc = new RTCPeerConnection(rtcConfig);
                 
                 // イベントハンドラ
                 pc.ontrack = (event) => {
