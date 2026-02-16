@@ -204,12 +204,14 @@ async def main():
     # 2. WebRTCサーバー起動（先に起動）
     logger.info("2. Starting WebRTC server...")
     
-    signaling = SignalingServer(display_capture)
+    webrtc_config_payload = _load_webrtc_config_payload()
+
+    signaling = SignalingServer(display_capture, webrtc_config_payload)
     input_handler = InputHandler(display_capture)
     
     # aiohttp Application作成
     app = web.Application()
-    app["webrtc_config"] = _load_webrtc_config_payload()
+    app["webrtc_config"] = webrtc_config_payload
     app.router.add_get('/', index)
     app.router.add_get('/webrtc-config', webrtc_config)
     app.router.add_post('/offer', signaling.handle_offer)

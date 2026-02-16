@@ -7,7 +7,7 @@ SDP offer/answerとICE candidateの交換を処理
 import json
 import logging
 from aiohttp import web
-from aiortc import RTCPeerConnection, RTCSessionDescription
+from aiortc import RTCPeerConnection, RTCSessionDescription, RTCConfiguration, RTCIceServer
 from aiortc.contrib.media import MediaBlackhole
 
 from .video_track import QEMUVideoTrack, MockVideoTrack
@@ -18,15 +18,42 @@ logger = logging.getLogger(__name__)
 class SignalingServer:
     """WebRTCシグナリングサーバー"""
     
-    def __init__(self, display_capture):
+    def __init__(self, display_capture, webrtc_config_payload=None):
         """
         Args:
             display_capture: DisplayCaptureインスタンス
+            webrtc_config_payload: /webrtc-configで返す設定ペイロード
         """
         self.display_capture = display_capture
         self.pcs = set()  # アクティブなRTCPeerConnection
+        self.rtc_configuration = self._build_rtc_configuration(webrtc_config_payload or {})
         
         logger.info("SignalingServer initialized")
+
+    def _build_rtc_configuration(self, payload):
+        """環境変数由来のWebRTC設定をaiortc向けに変換"""
+        ice_servers = []
+        for server in payload.get("iceServers", []):
+            if not isinstance(server, dict):
+                continue
+            urls = server.get("urls")
+            if isinstance(urls, str):
+                urls = [urls]
+            if not isinstance(urls, list) or not urls:
+                continue
+            if not all(isinstance(url, str) and url for url in urls):
+                continue
+            ice_servers.append(
+                RTCIceServer(
+                    urls=urls,
+                    username=server.get("username"),
+                    credential=server.get("credential"),
+                )
+            )
+
+        if not ice_servers:
+            return None
+        return RTCConfiguration(iceServers=ice_servers)
     
     async def handle_offer(self, request: web.Request) -> web.Response:
         """
@@ -48,7 +75,10 @@ class SignalingServer:
             logger.info(f"Received offer from {request.remote}")
             
             # RTCPeerConnection作成
-            pc = RTCPeerConnection()
+            if self.rtc_configuration is not None:
+                pc = RTCPeerConnection(configuration=self.rtc_configuration)
+            else:
+                pc = RTCPeerConnection()
             self.pcs.add(pc)
             
             @pc.on("connectionstatechange")
