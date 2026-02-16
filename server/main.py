@@ -5,7 +5,6 @@ QEMU D-Bus DisplayをWebRTCでブラウザに配信
 """
 
 import asyncio
-import json
 import logging
 import os
 import sys
@@ -39,111 +38,28 @@ logging.getLogger('dbus.dmabuf_gl').setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
-def _contains_placeholder(value: str) -> bool:
-    lower = value.lower()
-    return (
-        "your_turn_host" in lower
-        or "turn_public_ip_or_dns" in lower
-        or "your_public_ip" in lower
-        or "<" in value
-        or ">" in value
-    )
-
-
-def _normalize_urls(urls):
-    if isinstance(urls, str):
-        return [urls]
-    if isinstance(urls, list) and all(isinstance(item, str) for item in urls):
-        return urls
-    return None
-
-
 def _load_webrtc_config_payload():
     """
-    WebRTC ICE設定を環境変数から読み込む。
-
-    QEMU_WEBRTC_ICE_SERVERS:
-      JSON配列文字列。例:
-      [{"urls":"stun:stun.l.google.com:19302"},
-       {"urls":["turn:turn.example.com:3478?transport=udp","turn:turn.example.com:3478?transport=tcp"],
-        "username":"user","credential":"pass"}]
-
-    QEMU_WEBRTC_ICE_TRANSPORT_POLICY:
-      "all" または "relay"（省略時は未指定）
-
-    代替（JSONを使わない設定）:
-      QEMU_WEBRTC_TURN_HOST
-      QEMU_WEBRTC_TURN_USERNAME (default: webrtc)
-      QEMU_WEBRTC_TURN_CREDENTIAL
-      QEMU_WEBRTC_TURN_TRANSPORTS (default: udp,tcp)
-      QEMU_WEBRTC_STUN_URL (optional)
+    WebRTC ICE設定を環境変数から読み込む（TURN非対応）。
     """
-    config = {"iceServers": []}
+    config = {"iceServers": [], "iceTransportPolicy": "all"}
     errors = []
 
-    ice_servers_raw = os.environ.get("QEMU_WEBRTC_ICE_SERVERS", "").strip()
-    if ice_servers_raw:
-        try:
-            parsed = json.loads(ice_servers_raw)
-            if isinstance(parsed, list):
-                config["iceServers"] = parsed
-            else:
-                errors.append("QEMU_WEBRTC_ICE_SERVERS must be a JSON array")
-        except json.JSONDecodeError as e:
-            errors.append(f"Invalid QEMU_WEBRTC_ICE_SERVERS JSON: {e}")
-    else:
-        turn_host = os.environ.get("QEMU_WEBRTC_TURN_HOST", "").strip()
-        turn_username = os.environ.get("QEMU_WEBRTC_TURN_USERNAME", "webrtc").strip()
-        turn_credential = os.environ.get("QEMU_WEBRTC_TURN_CREDENTIAL", "").strip()
-        turn_transports = os.environ.get("QEMU_WEBRTC_TURN_TRANSPORTS", "udp,tcp").strip()
-        stun_url = os.environ.get("QEMU_WEBRTC_STUN_URL", "").strip()
-
-        if turn_host:
-            if _contains_placeholder(turn_host):
-                errors.append("QEMU_WEBRTC_TURN_HOST contains placeholder text")
-            if not turn_credential:
-                errors.append("QEMU_WEBRTC_TURN_CREDENTIAL is required when QEMU_WEBRTC_TURN_HOST is set")
-            transports = [item.strip() for item in turn_transports.split(",") if item.strip()]
-            if not transports:
-                transports = ["udp", "tcp"]
-            turn_urls = [f"turn:{turn_host}:3478?transport={transport}" for transport in transports]
-            if stun_url:
-                config["iceServers"].append({"urls": stun_url})
-            config["iceServers"].append({
-                "urls": turn_urls,
-                "username": turn_username,
-                "credential": turn_credential,
-            })
-
-    policy = os.environ.get("QEMU_WEBRTC_ICE_TRANSPORT_POLICY", "").strip()
-    if policy in {"all", "relay"}:
-        config["iceTransportPolicy"] = policy
-    elif policy:
-        errors.append("QEMU_WEBRTC_ICE_TRANSPORT_POLICY must be 'all' or 'relay'")
-
-    # ICE server content validation
-    for idx, server in enumerate(config.get("iceServers", [])):
-        if not isinstance(server, dict):
-            errors.append(f"iceServers[{idx}] must be object")
-            continue
-        normalized_urls = _normalize_urls(server.get("urls"))
-        if normalized_urls is None:
-            errors.append(f"iceServers[{idx}].urls must be string or string[]")
-            continue
-        if any(_contains_placeholder(url) for url in normalized_urls):
-            errors.append(f"iceServers[{idx}].urls contains placeholder text")
-        if any(url.startswith("turn:") for url in normalized_urls):
-            if not server.get("username"):
-                errors.append(f"iceServers[{idx}] turn URL requires username")
-            if not server.get("credential"):
-                errors.append(f"iceServers[{idx}] turn URL requires credential")
+    # Optional STUN server for public candidate discovery.
+    stun_url = os.environ.get("QEMU_WEBRTC_STUN_URL", "").strip()
+    if stun_url:
+        if stun_url.startswith("turn:") or stun_url.startswith("turns:"):
+            errors.append("TURN URLs are not supported in this project")
+        elif not stun_url.startswith("stun:"):
+            errors.append("QEMU_WEBRTC_STUN_URL must start with stun:")
+        else:
+            config["iceServers"].append({"urls": stun_url})
 
     payload = {
         "iceServers": config.get("iceServers", []),
         "errors": errors,
+        "iceTransportPolicy": config["iceTransportPolicy"],
     }
-    if "iceTransportPolicy" in config:
-        payload["iceTransportPolicy"] = config["iceTransportPolicy"]
 
     if errors:
         for err in errors:

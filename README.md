@@ -54,17 +54,14 @@ qemu-system-x86_64 \
 
 ### 2. WebRTC サーバーを起動
 
-推奨（自動設定）:
+推奨:
 
 ```bash
 ./run_server.sh
 ```
 
-`run_server.sh` は以下を自動化します。
-- QEMU D-Bus ソケット (`/tmp/qemu_dbus.sock`) 設定
-- AWS IMDS から TURN ホスト (Public IPv4) 取得
-- `/etc/turnserver.conf` の `user=` から TURN 認証情報取得
-- `ICE_TRANSPORT_POLICY=relay` の適用
+`run_server.sh` は QEMU D-Bus ソケット (`/tmp/qemu_dbus.sock`) を設定して
+`start_webrtc_server.sh` を実行します。
 
 手動設定したい場合:
 
@@ -73,23 +70,6 @@ qemu-system-x86_64 \
 ```
 
 `SOCKET_PATH` 未指定時は `/tmp/qemu_dbus.sock` を使います。
-
-TURN を使う場合:
-
-```bash
-TURN_USERNAME=webrtc \
-TURN_CREDENTIAL='strongpassword' \
-ICE_TRANSPORT_POLICY=relay \
-./start_webrtc_server.sh
-```
-
-`TURN_HOST` 未指定時は、`start_webrtc_server.sh` が AWS IMDS
-(`169.254.169.254`) から Public IPv4 を自動取得して使用します。
-自動取得を無効化する場合:
-
-```bash
-AUTO_TURN_HOST=0 ./start_webrtc_server.sh
-```
 
 ### 3. ブラウザでアクセス
 
@@ -101,40 +81,14 @@ AUTO_TURN_HOST=0 ./start_webrtc_server.sh
   QEMU の D-Bus ソケットに接続するためのアドレス
 - `QEMU_WEBRTC_DOWNSAMPLE`  
   `1` で 1/2 ダウンサンプル（既定は `0` でフル解像度）
-- `QEMU_WEBRTC_ICE_SERVERS`  
-  WebRTC の ICE サーバー設定（JSON配列文字列）
-- `QEMU_WEBRTC_ICE_TRANSPORT_POLICY`  
-  ICEポリシー。`all` または `relay`
-- `QEMU_WEBRTC_TURN_HOST`  
-  TURNホスト名またはPublic IP（`QEMU_WEBRTC_ICE_SERVERS` 未指定時に利用）
-- `QEMU_WEBRTC_TURN_USERNAME`  
-  TURNユーザー名（既定: `webrtc`）
-- `QEMU_WEBRTC_TURN_CREDENTIAL`  
-  TURNパスワード
-- `QEMU_WEBRTC_TURN_TRANSPORTS`  
-  `udp,tcp` のようなカンマ区切り（既定: `udp,tcp`）
 - `QEMU_WEBRTC_STUN_URL`  
   任意のSTUN URL（例: `stun:stun.l.google.com:19302`）
 
-TURN を使う例:
+STUN を明示する例:
 
 ```bash
-export QEMU_WEBRTC_TURN_HOST=54.12.34.56
-export QEMU_WEBRTC_TURN_USERNAME=webrtc
-export QEMU_WEBRTC_TURN_CREDENTIAL='strongpassword'
-export QEMU_WEBRTC_TURN_TRANSPORTS=udp,tcp
 export QEMU_WEBRTC_STUN_URL='stun:stun.l.google.com:19302'
-export QEMU_WEBRTC_ICE_TRANSPORT_POLICY=all
 ```
-
-TURN経由のみで検証したい場合:
-
-```bash
-export QEMU_WEBRTC_ICE_TRANSPORT_POLICY=relay
-```
-
-`/webrtc-config` にプレースホルダ（`YOUR_TURN_HOST` / `<...>`）が含まれる場合、
-クライアントは接続を開始せず、設定エラーを表示します。
 
 ## プロジェクト構成
 
@@ -166,5 +120,4 @@ qemu-webrtc-dbus/
 ## 詳細ドキュメント
 
 - D-Bus 出力の詳細: `docs/QEMU_DBus_Display.md`
-- TURN 構築手順 (AWS): `docs/TURN_AWS_Setup.md`
 - 調査ログ: `Performance_Issue_v5.md`
